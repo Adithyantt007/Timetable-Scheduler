@@ -4,7 +4,7 @@ A prototype web application to generate timetables for educational institutions.
 
 ## Live Demo
 
-Try it online: [https://timetable-api.onrender.com](https://timetable-api.onrender.com)
+Try it online:  https://render.com/docs/web-services#port-binding
 
 ## Features
 
