@@ -4,8 +4,7 @@ A prototype web application to generate timetables for educational institutions.
 
 ## Live Demo
 
-Try it online:  https://render.com/docs/web-services#port-binding
-
+Try it online:  https://timetable-api-y0zl.onrender.com
 ## Features
 
 - Add / update / delete rooms, faculties, subjects, and batches
