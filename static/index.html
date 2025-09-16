@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Timetable Scheduler</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script crossorigin src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    .card { border: 1px solid #ddd; padding: 12px; margin: 10px; border-radius: 6px; }
+    input, select, button { margin: 4px; padding: 6px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    td, th { border: 1px solid #ccc; padding: 6px; text-align: center; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+const { useState, useEffect } = React;
+
+function App() {
+  const [msg, setMsg] = useState('');
+  const [rooms, setRooms] = useState([]);
+  const [faculties, setFaculties] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [batches, setBatches] = useState([]);
+  const [timetable, setTimetable] = useState({});
+
+  // --- Load Data ---
+  async function loadRooms() { setRooms((await axios.get('/api/rooms')).data); }
+  async function loadFaculties() { setFaculties((await axios.get('/api/faculty')).data); }
+  async function loadSubjects() { setSubjects((await axios.get('/api/subjects')).data); }
+  async function loadBatches() { setBatches((await axios.get('/api/batches')).data); }
+
+  useEffect(() => {
+    loadRooms();
+    loadFaculties();
+    loadSubjects();
+    loadBatches();
+  }, []);
+
+  // --- Add Handlers ---
+  function addRoom(ev) {
+    ev.preventDefault();
+    const f = ev.target;
+    axios.post('/api/rooms', {
+      room_id: f.room_id.value,
+      room_name: f.room_name.value,
+      capacity: f.capacity.value,
+      type: f.type.value,
+      resources: f.resources.value
+    }).then(() => { setMsg('Room added'); f.reset(); loadRooms(); });
+  }
+
+  function addFaculty(ev) {
+    ev.preventDefault();
+    const f = ev.target;
+    axios.post('/api/faculty', {
+      faculty_id: f.faculty_id.value,
+      name: f.name.value
+    }).then(() => { setMsg('Faculty added'); f.reset(); loadFaculties(); });
+  }
+
+  function addSubject(ev) {
+    ev.preventDefault();
+    const f = ev.target;
+    axios.post('/api/subjects', {
+      subject_id: f.subject_id.value,
+      name: f.name.value,
+      faculty_id: f.faculty_id.value
+    }).then(() => { setMsg('Subject added'); f.reset(); loadSubjects(); });
+  }
+
+  function addBatch(ev) {
+    ev.preventDefault();
+    const f = ev.target;
+    axios.post('/api/batches', {
+      batch_id: f.batch_id.value,
+      department: f.department.value,
+      year: f.year.value,
+      section: f.section.value,
+      size: f.size.value,
+      shift: f.shift.value
+    }).then(() => { setMsg('Batch added'); f.reset(); loadBatches(); });
+  }
+
+  // --- Delete Handlers ---
+  async function deleteRoom(id) { await axios.delete('/api/rooms/' + id); loadRooms(); }
+  async function deleteFaculty(id) { await axios.delete('/api/faculty/' + id); loadFaculties(); loadSubjects(); }
+  async function deleteSubject(id) { await axios.delete('/api/subjects/' + id); loadSubjects(); }
+  async function deleteBatch(id) { await axios.delete('/api/batches/' + id); loadBatches(); }
+
+  // --- Timetable ---
+  function generate() {
+    axios.post('/api/generate').then(resp => setMsg(`Scheduled ${resp.data.scheduled} entries (Unscheduled: ${resp.data.unscheduled})`));
+  }
+
+  function view(batch_id) {
+    if (!batch_id) { setMsg('Enter a batch ID'); return; }
+    axios.get('/api/timetable/batch/' + batch_id).then(resp => {
+      // Convert timetable object for display
+      const tt = {};
+      Object.entries(resp.data).forEach(([day, slots]) => {
+        tt[day] = slots.map(s => {
+          if (!s) return null;
+          const subName = subjects.find(sub => sub.sub_id === s.subject)?.sub_name || s.subject;
+          const facName = faculties.find(f => f.fac_id === s.faculty)?.fac_name || s.faculty;
+          const roomName = rooms.find(r => r.room_id === s.room)?.room_name || s.room;
+          return { subject: subName, faculty: facName, room: roomName };
+        });
+      });
+      setTimetable(tt);
+    });
+  }
+
+  // --- Render ---
+  return React.createElement('div', null,
+    React.createElement('h1', null, 'Timetable Scheduler'),
+
+    // --- Rooms ---
+    React.createElement('div', { className: 'card' },
+      React.createElement('h3', null, 'Add Room'),
+      React.createElement('form', { onSubmit: addRoom },
+        React.createElement('input', { name: 'room_id', placeholder: 'Room ID', required: true }),
+        React.createElement('input', { name: 'room_name', placeholder: 'Room Name', required: true }),
+        React.createElement('input', { name: 'capacity', placeholder: 'Capacity', type: 'number', required: true }),
+        React.createElement('input', { name: 'type', placeholder: 'Type', defaultValue: 'Lecture' }),
+        React.createElement('input', { name: 'resources', placeholder: 'Resources' }),
+        React.createElement('button', { type: 'submit' }, 'Add Room')
+      ),
+      React.createElement('ul', null,
+        rooms.map(r => React.createElement('li', { key: r.room_id },
+          r.room_id + ' - ' + r.room_name + ' (' + r.capacity + ') ',
+          React.createElement('button', { onClick: () => deleteRoom(r.room_id) }, 'Delete')
+        ))
+      )
+    ),
+
+    // --- Faculties ---
+    React.createElement('div', { className: 'card' },
+      React.createElement('h3', null, 'Add Faculty'),
+      React.createElement('form', { onSubmit: addFaculty },
+        React.createElement('input', { name: 'faculty_id', placeholder: 'Faculty ID', required: true }),
+        React.createElement('input', { name: 'name', placeholder: 'Name', required: true }),
+        React.createElement('button', { type: 'submit' }, 'Add Faculty')
+      ),
+      React.createElement('ul', null,
+        faculties.map(f => React.createElement('li', { key: f.fac_id },
+          f.fac_id + ' - ' + f.fac_name,
+          React.createElement('button', { onClick: () => deleteFaculty(f.fac_id) }, 'Delete')
+        ))
+      )
+    ),
+
+    // --- Subjects ---
+    React.createElement('div', { className: 'card' },
+      React.createElement('h3', null, 'Add Subject'),
+      React.createElement('form', { onSubmit: addSubject },
+        React.createElement('input', { name: 'subject_id', placeholder: 'Subject ID', required: true }),
+        React.createElement('input', { name: 'name', placeholder: 'Name', required: true }),
+        React.createElement('select', { name: 'faculty_id', required: true },
+          React.createElement('option', { value: '' }, 'Select Faculty'),
+          faculties.map(f => React.createElement('option', { key: f.fac_id, value: f.fac_id }, f.fac_name))
+        ),
+        React.createElement('button', { type: 'submit' }, 'Add Subject')
+      ),
+      React.createElement('ul', null,
+        subjects.map(s => {
+          const facName = faculties.find(f => f.fac_id === s.faculty_id)?.fac_name || 'N/A';
+          return React.createElement('li', { key: s.sub_id },
+            s.sub_id + ' - ' + s.sub_name + ' (Faculty: ' + facName + ')',
+            React.createElement('button', { onClick: () => deleteSubject(s.sub_id) }, 'Delete')
+          );
+        })
+      )
+    ),
+
+    // --- Batches ---
+    React.createElement('div', { className: 'card' },
+      React.createElement('h3', null, 'Add Batch'),
+      React.createElement('form', { onSubmit: addBatch },
+        React.createElement('input', { name: 'batch_id', placeholder: 'Batch ID', required: true }),
+        React.createElement('input', { name: 'department', placeholder: 'Department' }),
+        React.createElement('input', { name: 'year', placeholder: 'Year' }),
+        React.createElement('input', { name: 'section', placeholder: 'Section' }),
+        React.createElement('input', { name: 'size', placeholder: 'Size' }),
+        React.createElement('input', { name: 'shift', placeholder: 'Shift', defaultValue: 1 }),
+        React.createElement('button', { type: 'submit' }, 'Add Batch')
+      ),
+      React.createElement('ul', null,
+        batches.map(b => React.createElement('li', { key: b.batch_id },
+          b.batch_id + ' - ' + b.department + ' ' + b.section,
+          React.createElement('button', { onClick: () => deleteBatch(b.batch_id) }, 'Delete')
+        ))
+      )
+    ),
+
+    // --- Timetable Controls ---
+    React.createElement('div', { className: 'card' },
+      React.createElement('button', { onClick: generate }, 'Generate Timetable')
+    ),
+    React.createElement('div', { className: 'card' },
+      React.createElement('input', { placeholder: 'Enter Batch ID', id: 'batchInput' }),
+      React.createElement('button', { onClick: () => view(document.getElementById('batchInput').value) }, 'View Timetable')
+    ),
+
+    // --- Week-view Timetable Table ---
+    React.createElement('div', { className: 'card' },
+      React.createElement('table', null,
+        React.createElement('thead', null,
+          React.createElement('tr', null,
+            React.createElement('th', null, 'Day'),
+            ...Array.from({ length: 6 }, (_, i) => React.createElement('th', { key: i }, `Slot ${i + 1}`))
+          )
+        ),
+        React.createElement('tbody', null,
+          Object.entries(timetable).map(([day, slots]) =>
+            React.createElement('tr', { key: day },
+              React.createElement('td', null, day),
+              ...slots.map((s, i) => React.createElement('td', { key: i },
+                s ? `${s.subject} (${s.faculty}) in ${s.room}` : "-"
+              ))
+            )
+          )
+        )
+      )
+    ),
+
+    React.createElement('p', null, msg)
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
